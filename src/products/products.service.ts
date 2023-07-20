@@ -18,12 +18,10 @@ export class ProductsService {
     return this._productRepo.save(createdProduct);
   }
 
-  findAll() {
-    return this._productRepo.find({
-      relations: {
-        user: true,
-      },
-    });
+  findAll(first: number) {
+    const queryBuilder = this._productRepo.createQueryBuilder('product');
+    queryBuilder.leftJoinAndSelect('product.user', 'user').limit(first);
+    return queryBuilder.getMany();
   }
 
   findOne(id: number) {
