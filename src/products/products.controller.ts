@@ -20,8 +20,8 @@ export class ProductsController {
   }
 
   @Get()
-  findAll(@Query('first') first: number) {
-    return this.productsService.findAll(first);
+  findAll(@Query('first') first: number, @Query('after') after: number) {
+    return this.productsService.findAll(first, after);
   }
 
   @Get(':id')

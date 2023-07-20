@@ -18,9 +18,14 @@ export class ProductsService {
     return this._productRepo.save(createdProduct);
   }
 
-  findAll(first: number) {
+  findAll(first: number, after: number) {
     const queryBuilder = this._productRepo.createQueryBuilder('product');
-    queryBuilder.leftJoinAndSelect('product.user', 'user').limit(first);
+    console.log(first, after);
+
+    queryBuilder
+      .leftJoinAndSelect('product.user', 'user')
+      .limit(first)
+      .offset(after);
     return queryBuilder.getMany();
   }
 
