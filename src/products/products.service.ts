@@ -20,16 +20,15 @@ export class ProductsService {
   }
 
   async findAll(first: number, cursor: string) {
-    const queryBuilder = this._productRepo.createQueryBuilder('product');
+    const queryBuilder = this._productRepo
+      .createQueryBuilder('product')
+      .leftJoinAndSelect('product.user', 'user')
+      .limit(first);
     const productEdgeBuilder = new ProductEdgeBuilder();
-    queryBuilder.leftJoinAndSelect('product.user', 'user').limit(first);
-    if (cursor) {
-      const cursorFromRequest = productEdgeBuilder.readCursor(cursor);
+    if (cursor)
       queryBuilder.where('product.id > :cursor', {
-        cursor: cursorFromRequest.productId,
+        cursor: productEdgeBuilder.readCursor(cursor).productId,
       });
-    }
-
     const products = await queryBuilder.getMany();
     const edges = await productEdgeBuilder.createEdge(products);
     return edges;
