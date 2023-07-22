@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User } from './entities/user.entity';
+import { User, UserEdgeBuilder } from './entities/user.entity';
 import { Product } from 'src/products/entities/product.entity';
 
 @Injectable()
@@ -16,11 +16,19 @@ export class UsersService {
     return this._userRepo.save(createdUser);
   }
 
-  findAll() {
+  async findAll(first: number, cursor: string) {
     const qb = this._userRepo
       .createQueryBuilder('user')
-      .leftJoinAndSelect('user.products', 'products');
-    return qb.getMany();
+      .orderBy({ id: 'ASC' })
+      .limit(first);
+    const userEdgeBuilder = new UserEdgeBuilder();
+    if (cursor) {
+      qb.where('user.id > :cursor', {
+        cursor: userEdgeBuilder.readCursor(cursor).id,
+      });
+    }
+    const users = await qb.getMany();
+    return userEdgeBuilder.createEdge(users);
   }
 
   findOne(id: string) {

@@ -20,8 +20,8 @@ export class UsersController {
   }
 
   @Get()
-  findAll() {
-    return this.usersService.findAll();
+  findAll(@Query('first') first: number, @Query('cursor') cursor: string) {
+    return this.usersService.findAll(first, cursor);
   }
 
   @Get(':id')
