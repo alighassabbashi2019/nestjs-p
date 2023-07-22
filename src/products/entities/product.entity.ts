@@ -33,7 +33,7 @@ export class Product {
   user: User;
 }
 
-export class ProductEdge
+export class ProductEdgeBuilder
   implements
     EdgeBuilderInterface<Product, { productId: number; title: string }>
 {

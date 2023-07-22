@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateProductDto, UpdateProductDto } from './dto/product.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Product, ProductEdge } from './entities/product.entity';
+import { Product, ProductEdgeBuilder } from './entities/product.entity';
 import { Repository } from 'typeorm';
 import { UsersService } from 'src/users/users.service';
 import { Edge } from 'src/types/edge.type';
@@ -21,17 +21,17 @@ export class ProductsService {
 
   async findAll(first: number, cursor: string) {
     const queryBuilder = this._productRepo.createQueryBuilder('product');
-    const edgeBuilder = new ProductEdge();
+    const productEdgeBuilder = new ProductEdgeBuilder();
     queryBuilder.leftJoinAndSelect('product.user', 'user').limit(first);
     if (cursor) {
-      const cursorFromRequest = edgeBuilder.readCursor(cursor);
+      const cursorFromRequest = productEdgeBuilder.readCursor(cursor);
       queryBuilder.where('product.id > :cursor', {
         cursor: cursorFromRequest.productId,
       });
     }
 
     const products = await queryBuilder.getMany();
-    const edges = await edgeBuilder.createEdge(products);
+    const edges = await productEdgeBuilder.createEdge(products);
     return edges;
   }
 
