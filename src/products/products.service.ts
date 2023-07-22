@@ -1,9 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateProductDto, UpdateProductDto } from './dto/product.dto';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Product } from './entities/product.entity';
+import { Product, ProductEdge } from './entities/product.entity';
 import { Repository } from 'typeorm';
 import { UsersService } from 'src/users/users.service';
+import { Edge } from 'src/types/edge.type';
 
 @Injectable()
 export class ProductsService {
@@ -13,20 +14,25 @@ export class ProductsService {
     private readonly _userService: UsersService,
   ) {}
 
-  async create(createProductDto: CreateProductDto) {
+  async create(createProductDto: CreateProductDto): Promise<Product> {
     const createdProduct = this._productRepo.create(createProductDto);
     return this._productRepo.save(createdProduct);
   }
 
-  findAll(first: number, after: number) {
+  async findAll(first: number, cursor: string) {
     const queryBuilder = this._productRepo.createQueryBuilder('product');
-    console.log(first, after);
+    const edgeBuilder = new ProductEdge();
+    queryBuilder.leftJoinAndSelect('product.user', 'user').limit(first);
+    if (cursor) {
+      const cursorFromRequest = edgeBuilder.readCursor(cursor);
+      queryBuilder.where('product.id > :cursor', {
+        cursor: cursorFromRequest.productId,
+      });
+    }
 
-    queryBuilder
-      .leftJoinAndSelect('product.user', 'user')
-      .limit(first)
-      .offset(after);
-    return queryBuilder.getMany();
+    const products = await queryBuilder.getMany();
+    const edges = await edgeBuilder.createEdge(products);
+    return edges;
   }
 
   findOne(id: number) {
