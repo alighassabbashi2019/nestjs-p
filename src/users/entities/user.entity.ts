@@ -5,7 +5,6 @@ import {
   // BeforeInsert,
   Column,
   Entity,
-  Index,
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
