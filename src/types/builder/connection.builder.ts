@@ -1,0 +1,171 @@
+import { ConnectionArgs } from '../args.type';
+import { Connection } from '../connection.type';
+import { Cursor } from '../cursor/cursor';
+import { CursorData } from '../cursor/cursor-data.type';
+import { ConnectionEdge } from '../edge.type';
+import { Bounds } from '../interfaces/bounds.interface';
+import { Pager } from '../interfaces/pager.interface';
+import { Pagination } from '../interfaces/pagination.interface';
+import { PageInfo } from '../page-info.type';
+
+export abstract class ConnectionBuilder<
+  TConnection extends Connection<T, TConnectionEdge>,
+  TConnectionEdge extends ConnectionEdge<T>,
+  T,
+  TCursorData extends CursorData,
+  TConnectionArgs extends ConnectionArgs = ConnectionArgs,
+> {
+  public readonly args: TConnectionArgs;
+  public readonly after?: TCursorData;
+  public readonly before?: TCursorData;
+  public readonly first: number;
+  public readonly last: number;
+  public readonly edgesPerPage?: number;
+  public readonly page?: number;
+
+  public constructor(args: TConnectionArgs, maxEdgesToReturn: number) {
+    this.args = args;
+    const { after, before, edgesPerPage, page, first, last } = args;
+
+    this.after = after ? this.extractCursorData('after', after) : undefined;
+    this.before = before ? this.extractCursorData('before', before) : undefined;
+
+    maxEdgesToReturn =
+      1 <= maxEdgesToReturn ? Math.trunc(maxEdgesToReturn) : Infinity;
+    if (this.isPagerMode()) {
+      this.edgesPerPage = maxEdgesToReturn = Math.min(
+        edgesPerPage ?? Infinity,
+        maxEdgesToReturn,
+      );
+      this.page = page ?? 1;
+    }
+
+    if (!last) {
+      this.first = Math.min(first ?? maxEdgesToReturn, maxEdgesToReturn);
+      this.last = this.first;
+    } else {
+      this.first = first ?? Infinity;
+      this.last = Math.min(last ?? maxEdgesToReturn, maxEdgesToReturn);
+    }
+  }
+
+  protected abstract getCursorData(node: T, index: number): TCursorData;
+  protected abstract isValidCursorData(data: unknown): boolean;
+  protected abstract getCursorDataError(
+    name: 'after' | 'before',
+    value: string,
+  ): null | Error;
+
+  protected extractCursorData(
+    name: 'after' | 'before',
+    cursor: string,
+  ): undefined | TCursorData {
+    const data = Cursor.toData(cursor);
+    if (data !== null && this.isValidCursorData(data)) {
+      return <TCursorData>data;
+    }
+    const error = this.getCursorDataError(name, cursor);
+    if (error) {
+      throw error;
+    }
+  }
+
+  public getBounds(totalEdges: number): Bounds {
+    return this.getPagination(totalEdges).bounds;
+  }
+
+  protected getPagination(totalEdges: number): Pagination {
+    totalEdges =
+      totalEdges < 0 || Infinity === totalEdges ? 0 : Math.trunc(totalEdges);
+    const pager = this.getPager(totalEdges);
+    const sliceTotalEdges = Math.min(
+      pager?.edgesPerPage ?? Infinity,
+      totalEdges,
+    );
+    const sliceEnd = Math.min(this.first, sliceTotalEdges);
+    const sliceStart = Math.max(sliceEnd - this.last, 0);
+    const pagerStart = pager?.start ?? 0;
+    const start = pagerStart + sliceStart;
+    const end = pagerStart + sliceEnd;
+    const bounds = { start, end, skip: start, take: end - start };
+    return { totalEdges, pager, bounds };
+  }
+
+  protected getPager(totalEdges: number): null | Pager {
+    if (!this.isPagerMode()) {
+      return null;
+    }
+
+    const edgesPerPage =
+      Infinity === this.edgesPerPage ? totalEdges : this.edgesPerPage;
+    const totalPages = Math.ceil(totalEdges / edgesPerPage);
+    const { page } = this;
+    const start = Math.min(edgesPerPage * (page - 1), totalEdges);
+    const end = Math.min(start + edgesPerPage, totalEdges);
+    return { edgesPerPage, totalPages, page, start, end };
+  }
+
+  protected isPagerMode(): this is { edgesPerPage: number; page: number } {
+    return !!this.args.edgesPerPage || !!this.args.page;
+  }
+
+  public async build(
+    nodes: T[],
+    totalEdges: number,
+  ): Promise<null | TConnection> {
+    if (!nodes.length) {
+      return null;
+    }
+    const pagination = this.getPagination(totalEdges);
+    const edges = await this.buildEdges(nodes, pagination);
+    const pageInfo = this.buildPageInfo(edges, pagination);
+    return this.createConnection({ pageInfo, edges });
+  }
+
+  protected async buildEdges(
+    nodes: T[],
+    pagination: Pagination,
+  ): Promise<TConnectionEdge[]> {
+    return Promise.all(
+      nodes.map((node, index) => {
+        const cursor = Cursor.toString(
+          this.getCursorData(node, pagination.bounds.start + index),
+        );
+        return this.createConnectionEdge({ cursor, node });
+      }),
+    );
+  }
+
+  protected buildPageInfo(
+    edges: TConnectionEdge[],
+    pagination: Pagination,
+  ): PageInfo {
+    const { totalEdges, pager, bounds } = pagination;
+    return {
+      hasNextPage: pager
+        ? pager.page < pager.totalPages
+        : !!this.before || bounds.end < totalEdges,
+      hasPreviousPage: pager
+        ? 1 < pager.page
+        : !!this.after || 0 < bounds.start,
+      startCursor: edges[0].cursor,
+      endCursor: edges[edges.length - 1].cursor,
+      totalEdges,
+      edgesPerPage: pager?.edgesPerPage,
+      totalPages: pager?.totalPages,
+      page: pager?.page,
+    };
+  }
+
+  protected async createConnectionEdge(
+    edge: ConnectionEdge<T>,
+  ): Promise<TConnectionEdge> {
+    return <TConnectionEdge>edge;
+  }
+
+  protected async createConnection(
+    connection: Connection<T, TConnectionEdge>,
+  ): Promise<TConnection> {
+    return <TConnection>connection;
+  }
+}
