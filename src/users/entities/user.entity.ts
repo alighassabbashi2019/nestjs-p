@@ -1,7 +1,15 @@
 import { IsString, Min } from 'class-validator';
 import { Product } from 'src/products/entities/product.entity';
 import { Edge, EdgeBuilderInterface } from 'src/types/edge.type';
-import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  // BeforeInsert,
+  Column,
+  Entity,
+  Index,
+  OneToMany,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
+// import { v1 as uuidV1 } from 'uuid';
 
 @Entity()
 export class User {
@@ -20,6 +28,16 @@ export class User {
 
   @OneToMany(() => Product, (product) => product.user)
   products: Product[];
+
+  /* this property added to demostrate how we can have sequential
+   * uuids in the first place.
+   * you can uncomment it (and uuidV1, BeforeInsert imports) if that's your choise.
+   */
+  // @BeforeInsert()
+  // generateId() {
+  //   const uuid = uuidV1();
+  //   this.id = uuid;
+  // }
 }
 
 export class UserEdgeBuilder
